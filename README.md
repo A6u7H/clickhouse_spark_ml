@@ -1,4 +1,4 @@
-# clickhouse
+# Spark pipeline
 
 **Вариант 10:** ClickHouse
 
