@@ -1,0 +1,30 @@
+version: '3.8'
+services:
+  db:
+    image: clickhouse/clickhouse-server
+    container_name: clickhouse
+    ports:
+      - 9000:9000
+      - 8123:8123
+    networks:
+      - testnet
+    volumes:
+      - ./data_market:/var/lib/clickhouse/
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+  cluster_model:
+    build: .
+    container_name: cluster_spark
+    volumes:
+      - ./experiments:/experiments
+      - ./data_market:/data_market
+    command: /bin/bash -c '/opt/spark/bin/spark-submit ./src/loader.py && /opt/spark/bin/spark-submit ./src/clustering.py && /opt/spark/bin/spark-submit ./src/classifier.py'
+    image: danjiii/cluster_spark
+    networks:
+      - testnet
+
+networks:
+  testnet:
+    driver: bridge
