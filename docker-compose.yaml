@@ -6,6 +6,8 @@ services:
     ports:
       - 9000:9000
       - 8123:8123
+    env_file:
+      - .env
     networks:
       - testnet
     volumes:
@@ -14,9 +16,17 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://db:9000"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+
   cluster_model:
     build: .
     container_name: cluster_spark
+    env_file: 
+      - .env
     volumes:
       - ./experiments:/experiments
       - ./data_market:/data_market
@@ -24,6 +34,7 @@ services:
     image: danjiii/cluster_spark
     networks:
       - testnet
+    restart: on-failure
 
 networks:
   testnet:

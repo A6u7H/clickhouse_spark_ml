@@ -1,15 +1,20 @@
+import os
+import yaml
 import pandas as pd
 import configparser
 
 from clickhouse_driver import Client
 from typing import Dict
+from dotenv import load_dotenv
 
-from consts import COLUMNS, RENAME
+load_dotenv()
 
 
 class DataLoader:
     def __init__(self, config):
         self.config = config
+        with open(self.config["CONST"]["PATH"], 'r') as stream:
+            self.project_params = yaml.safe_load(stream)
 
     def get_create_table_query(
         self,
@@ -39,13 +44,15 @@ class DataLoader:
             sep="\t",
             nrows=self.config.getint("CLICKHOUSE", "UPLOAD_LIMIT")
         )
-        data = data.rename(columns=RENAME)
-        data = data[COLUMNS]
+        data = data.rename(columns=self.project_params["rename"])
+        data = data[self.project_params["columns"]]
         data = data.fillna(0)
-
         client = Client(
             host=self.config["CLICKHOUSE"]["HOST"],
-            port=self.config["CLICKHOUSE"]["PORT"]
+            port=self.config["CLICKHOUSE"]["PORT"],
+            database=os.environ["CLICKHOUSE_DB"],
+            user=os.environ["CLICKHOUSE_USER"],
+            password=os.environ["CLICKHOUSE_PASSWORD"]
         )
 
         table_name = self.config["CLICKHOUSE"]["TABLE_NAME"]
@@ -54,26 +61,31 @@ class DataLoader:
         client.execute(query)
         client.execute(f"INSERT INTO {table_name} VALUES", data.to_dict('records'))
 
-    def load(self, table_name=None, save_path=None, extra_columns=None):
+    def load(self):
         client = Client(
             host=self.config["CLICKHOUSE"]["HOST"],
-            port=self.config["CLICKHOUSE"]["PORT"]
+            port=self.config["CLICKHOUSE"]["PORT"],
+            database=os.environ["CLICKHOUSE_DB"],
+            user=os.environ["CLICKHOUSE_USER"],
+            password=os.environ["CLICKHOUSE_PASSWORD"]
         )
-        if table_name is None:
-            table_name = self.config["CLICKHOUSE"]["TABLE_NAME"]
+
+        table_name = self.config["CLICKHOUSE"]["TABLE_NAME"]
         nrows = self.config.getint("CLICKHOUSE", "DOWNLOAD_LIMIT")
         data = client.execute(f"SELECT * FROM {table_name} limit {nrows}")
-        columns = COLUMNS + extra_columns if extra_columns is not None else COLUMNS
-        df = pd.DataFrame(data=data, columns=columns)
-        if save_path is None:
-            df.to_parquet(self.config["CLICKHOUSE"]["DATA_SAVE_PATH"], index=False)
-        else:
-            df.to_parquet(save_path, index=False)
+        df = pd.DataFrame(
+            data=data,
+            columns=self.project_params["columns"]
+        )
+        df.to_parquet(self.config["CLICKHOUSE"]["DATA_SAVE_PATH"], index=False)
 
     def upload_prediction(self, data):
         client = Client(
             host=self.config["CLICKHOUSE"]["HOST"],
-            port=self.config["CLICKHOUSE"]["PORT"]
+            port=self.config["CLICKHOUSE"]["PORT"],
+            database=os.environ["CLICKHOUSE_DB"],
+            user=os.environ["CLICKHOUSE_USER"],
+            password=os.environ["CLICKHOUSE_PASSWORD"]
         )
         table_name = "Cluster"
         query = self.get_create_table_query(table_name, dict(data.dtypes))
